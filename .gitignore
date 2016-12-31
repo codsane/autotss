@@ -1,0 +1,6 @@
+.idea/
+*.db
+tsschecker/
+devices.txt
+[iP]*
+[Apple]*
