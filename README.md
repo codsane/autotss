@@ -22,4 +22,4 @@ I was curious to see if Apple ever accidentally signs firmwares that should no l
 * [tsschecker](https://github.com/tihmstar/tsschecker)
 
 ## To Do
-* Device Identifier Validation (to prevent adding a device that doesn't exist)
+- [X] Device Identifier Validation (to prevent adding a device that doesn't exist)
