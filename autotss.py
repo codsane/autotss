@@ -4,7 +4,7 @@ import subprocess
 import dataset
 import os
 
-def get_device_list():
+def get_device_list(): # Returns a list of all devices with firmwares being signed
     device_list = []
 
     api = r.get("https://api.ineal.me/tss/all")
