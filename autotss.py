@@ -4,6 +4,15 @@ import subprocess
 import dataset
 import os
 
+def get_device_list():
+    device_list = []
+
+    api = r.get("https://api.ineal.me/tss/all")
+    for device in api.json():
+        device_list.append(device)
+
+    return device_list
+
 def save_blobs(identifier, ecid, version): # Save shsh2 blobs with tsschecker
     save_path = os.path.dirname(os.path.realpath(__file__)) + "\\" + identifier + "\\" + ecid + "\\" + version
 
@@ -34,12 +43,15 @@ def check_for_devices(): # Check for new entries in devices.txt and add them to 
         for line in f:
             identifier, ecid = line.strip().replace(" ","").split(":")
 
-            db = dataset.connect('sqlite:///devices.db')
+            if identifier in get_device_list():
+                db = dataset.connect('sqlite:///devices.db')
 
-            blobs_db = db['blobs']
-            if blobs_db.find_one(ecid=ecid) is None:
-                blobs_db.insert_ignore(dict(identifier=identifier, ecid=ecid, versions_saved=''), ['ecid'])
-                print "Added " + identifier + " with ECID: " + ecid + " to database."
+                blobs_db = db['blobs']
+                if blobs_db.find_one(ecid=ecid) is None:
+                    blobs_db.insert_ignore(dict(identifier=identifier, ecid=ecid, versions_saved=''), ['ecid'])
+                    print "Added " + identifier + " with ECID: " + ecid + " to database."
+            else:
+                print "Could not add " + identifier + " with ECID: " + ecid + " to database...invalid identifier."
 
 def main():
     check_for_devices()
@@ -63,15 +75,12 @@ def main():
 
         for row in blobs_db.find():
             versions_saved = row['versions_saved'].split(',')
-            try:
-                for firmware in api.json()[row['identifier']]["firmwares"]:
-                    if firmware["signing"]:
-                        if firmware['version'] not in versions_saved:
-                            print "Attempting to save blobs for " + row['identifier'] + " on " + firmware['version'] + ' with ECID: ' + row['ecid'] + "..."
-                            save_blobs(row['identifier'], row['ecid'], firmware['version'])
-                            blobs_db.update(dict(identifier=row['identifier'], ecid=row['ecid'], versions_saved=row['versions_saved'] + ',' + firmware['version']), ['ecid'])
-            except KeyError:
-                print "Unable to fetch firmwares for " + row['identifier'] + " on " + firmware['version'] + ' with ECID: ' + row['ecid'] + "...check device identifier for typos."
+            for firmware in api.json()[row['identifier']]["firmwares"]:
+                if firmware["signing"]:
+                    if firmware['version'] not in versions_saved:
+                        print "Attempting to save blobs for " + row['identifier'] + " on " + firmware['version'] + ' with ECID: ' + row['ecid'] + "..."
+                        save_blobs(row['identifier'], row['ecid'], firmware['version'])
+                        blobs_db.update(dict(identifier=row['identifier'], ecid=row['ecid'], versions_saved=row['versions_saved'] + ',' + firmware['version']), ['ecid'])
 
         api_db.update(dict(field='last_modified', value=api.headers['last-modified']), ['field'])
         api_db.update(dict(field='num_devices', value=str(blobs_db.count())), ['field'])
