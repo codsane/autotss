@@ -12,7 +12,7 @@ I was curious to see if Apple ever accidentally signs firmwares that should no l
   2. Find your device's ECID. Your device ECID can be found in iTunes. (both hex and dec are accepted)
   3. Put this information in 'devices.txt' in the following format: `identifier:ecid` `example: iPhone9,4:E1041046B003A`
 2. Place [tsschecker](https://github.com/tihmstar/tsschecker) in the same directory as autotss.py
-3. (Optional) Schedule autotss to run frequently to keep blobs for all signed firmwares
+3. (Optional) Schedule autotss to run frequently to save blobs for firmwares as they are signed
 
 ## Requirements
 * python
