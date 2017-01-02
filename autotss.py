@@ -14,7 +14,7 @@ def get_device_list():
     return device_list
 
 def save_blobs(identifier, ecid, version): # Save shsh2 blobs with tsschecker
-    save_path = os.path.dirname(os.path.realpath(__file__)) + "\\" + identifier + "\\" + ecid + "\\" + version
+    save_path = os.path.dirname(os.path.realpath(__file__)) + "\\tsschecker\\" + identifier + "\\" + ecid + "\\" + version
 
     if platform.startswith("linux"):
         user_platform = "linux"
