@@ -1,4 +1,3 @@
-from sys import platform
 import requests as r
 import subprocess
 import dataset
@@ -14,23 +13,14 @@ def get_device_list(): # Returns a list of all devices with firmwares being sign
     return device_list
 
 def save_blobs(identifier, ecid, version): # Save shsh2 blobs with tsschecker
-    save_path = os.path.dirname(os.path.realpath(__file__)) + "\\tsschecker\\" + identifier + "\\" + ecid + "\\" + version
-
-    if platform.startswith("linux"):
-        user_platform = "linux"
-        save_path = save_path.replace("\\","/")
-    elif platform == "darwin":
-        user_platform = "macos"
-        save_path = save_path.replace("\\", "/")
-    elif platform == "win32":
-        user_platform = "windows"
+    save_path = os.path.dirname(os.path.realpath(__file__)) + "/blobs/" + identifier + "/" + ecid + "/" + version
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    output = subprocess.Popen(['tsschecker/tsschecker_' + user_platform, '-e', ecid, '-d', identifier, '-i', version, '-s', '--save-path', save_path], stdout=subprocess.PIPE)
+    output = subprocess.Popen(['./tsschecker', '-e', ecid, '-d', identifier, '-i', version, '-s', '--save-path', save_path], stdout=subprocess.PIPE)
 
-    if "success" in output.stdout.read().lower():
+    if "Saved shsh blobs!" in output.stdout.read():
         print "Successfully saved blobs for " + identifier + " on " + version + ' with ECID: ' + ecid + "!"
     else:
         print "Error saving blobs for " + identifier + " on " + version + ' with ECID: ' + ecid + "!"
