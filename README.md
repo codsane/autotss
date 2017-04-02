@@ -10,7 +10,7 @@ I was curious to see if Apple ever accidentally signs firmwares that should no l
 1. Place device info in devices.txt
   1. Find your device's identifier. You can use [IPSW.me's device finder](https://ipsw.me/device-finder) to do this.
   2. Find your device's ECID. Your device ECID can be found in iTunes. (both hex and dec are accepted)
-  3. Put this information in 'devices.txt' in the following format: `identifier:ecid` `example: iPhone9,4:E1041046B003A`
+  3. Put this information in 'devices.txt' in the following format: `identifier:ecid` `example: iPhone8,4:2953519105564` OR `identifier-boardconfig:ecid` `example: iPhone8,4-n69uap:2953519105564`
 2. Place [tsschecker](https://github.com/tihmstar/tsschecker) in the same directory as autotss.py
 3. (Optional) Schedule autotss to run frequently to save blobs for firmwares as they are signed
 
@@ -20,6 +20,3 @@ I was curious to see if Apple ever accidentally signs firmwares that should no l
 * [requests](https://github.com/kennethreitz/requests)
 * [dataset](https://github.com/pudo/dataset)
 * [tsschecker](https://github.com/tihmstar/tsschecker)
-
-## To Do
-- [X] Device Identifier Validation (to prevent adding a device that doesn't exist)
