@@ -4,8 +4,8 @@ import dataset
 import os
 
 def get_device_board(identifier): # Returns the board config given a device identifier
-    api = r.get('https://api.ineal.me/tss/' + identifier)
-    return api.json()[identifier]['board']
+    api = r.get('https://api.ipsw.me/v2.1/firmwares.json/condensed')
+    return api.json()['devices'][identifier]['BoardConfig']
 
 def save_blobs(identifier, board_config, ecid, version): # Save shsh2 blobs with tsschecker
     save_path = os.path.dirname(os.path.realpath(__file__)) + "/blobs/" + identifier + "/" + ecid + "/" + version
@@ -47,30 +47,30 @@ def main():
 
     blobs_db = db['blobs']
     api_db = db['api']
-    api_db.insert_ignore(dict(field='last_modified', value=''), ['field'])
+    api_db.insert_ignore(dict(field='md5', value=''), ['field'])
     api_db.insert_ignore(dict(field='num_devices', value=''), ['field'])
 
-    api = r.get('https://api.ineal.me/tss/all')
+    api = r.get('https://api.ipsw.me/v2.1/firmwares.json/condensed')
 
     print "\nChecking for new signed firmwares or new added devices..."
-    if (api.headers['last-modified'] != api_db.find_one(field='last_modified')['value']) or (str(blobs_db.count()) != api_db.find_one(field='num_devices')['value']):
+    if (api.headers['content-md5'] != api_db.find_one(field='md5')['value']) or (str(blobs_db.count()) != api_db.find_one(field='num_devices')['value']):
         if str(blobs_db.count()) != api_db.find_one(field='num_devices')['value']:
             print "New devices found, checking for signed firmwares..."
 
-        if (api.headers['last-modified'] != api_db.find_one(field='last_modified')['value']):
+        if (api.headers['Content-Md5'] != api_db.find_one(field='md5')['value']):
             print "New signed firmwares found...\n"
 
         for row in blobs_db.find():
             versions_saved = row['versions_saved'].split(',')
-            for firmware in api.json()[row['identifier']]['firmwares']:
-                if firmware['signing']:
+            for firmware in api.json()['devices'][row['identifier']]['firmwares']:
+                if firmware['signed']:
                     if firmware['version'] not in versions_saved:
                         print "Attempting to save blobs for " + row['identifier'] + " on " + firmware['version'] + ' with ECID: ' + row['ecid'] + "..."
                         saved_blobs = save_blobs(row['identifier'], row['board_config'], row['ecid'], firmware['version'])
                         if saved_blobs:
                             blobs_db.update(dict(ecid=row['ecid'], versions_saved=row['versions_saved'] + firmware['version'] + ','), ['ecid'])
 
-        api_db.update(dict(field='last_modified', value=api.headers['last-modified']), ['field'])
+        api_db.update(dict(field='md5', value=api.headers['content-md5']), ['field'])
         api_db.update(dict(field='num_devices', value=str(blobs_db.count())), ['field'])
     else:
         print "No new blobs to be saved...nothing to do here."
