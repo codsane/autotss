@@ -4,7 +4,7 @@ import dataset
 import os
 
 def get_device_board(identifier): # Returns the board config given a device identifier
-    api = r.get('https://api.ineal.me/tss/all')
+    api = r.get('https://api.ineal.me/tss/' + identifier)
     return api.json()[identifier]['board']
 
 def save_blobs(identifier, board_config, ecid, version): # Save shsh2 blobs with tsschecker
