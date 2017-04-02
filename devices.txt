@@ -1,2 +1,7 @@
 identifier:ecid
 iPhone9,4:F122503N8905B
+
+or (specifying a boardconfig is optional, but required for some models)
+
+identifier-boardconfig:ecid
+iPhone8,4-n69uap:2953519105563
