@@ -4,40 +4,54 @@ import dataset
 import os
 
 
-def get_board_config(identifier): # Returns the board config given a device identifier
+def get_board_config(identifier):  # Returns the board config given a device identifier
 	api = r.get('https://api.ipsw.me/v2.1/firmwares.json/condensed').json()
 	return api['devices'][identifier]['BoardConfig']
 
 
 def get_ota_versions(identifier): # Returns all OTA versions of iOS for a particular identifier
 	versions = []
-	api = r.get('https://api.ipsw.me/v2.1/ota.json/condensed').json()
-	for firmware in api[identifier]['firmwares']:
-		try:
-			if firmware['releasetype'] == 'Beta':
-				continue
-		except KeyError:
-			if not firmware['version'].startswith("9.9"):
-				if firmware['version'] not in versions:
-					versions.append(firmware['version'])
-	return versions
 
+	db = dataset.connect('sqlite:///devices.db')
+	api_db = db['api']
 
-def get_beta_versions(identifier): # Returns all beta versions of iOS for a particular identifier
-	versions = []
-	api = r.get('https://api.ipsw.me/v2.1/ota.json/condensed').json()
-	for firmware in api[identifier]['firmwares']:
-		try:
-			if firmware['releasetype'] == 'Beta':
+	api = r.get('https://api.ipsw.me/v2.1/ota.json/condensed')
+
+	if api.headers['content-md5'] != api_db.find_one(field='ota_json_md5')['value']:
+		for firmware in api.json()[identifier]['firmwares']:
+			try:
+				if firmware['releasetype'] == 'Beta':
+					continue
+			except KeyError:
 				if not firmware['version'].startswith("9.9"):
 					if firmware['version'] not in versions:
 						versions.append(firmware['version'])
-		except KeyError:
-			continue
+		api_db.update(dict(field='ota_json_md5', value=api.headers['content-md5']), ['field'])
 	return versions
 
 
-def save_blobs(identifier, board_config, ecid, version, versions_saved, version_type): # Save shsh2 blobs with tsschecker
+def get_beta_versions(identifier):  # Returns all beta versions of iOS for a particular identifier
+	versions = []
+
+	db = dataset.connect('sqlite:///devices.db')
+	api_db = db['api']
+
+	api = r.get('https://api.ipsw.me/v2.1/ota.json/condensed')
+
+	if api.headers['content-md5'] != api_db.find_one(field='ota_json_md5')['value']:
+		for firmware in api.json()[identifier]['firmwares']:
+			try:
+				if firmware['releasetype'] == 'Beta':
+					if not firmware['version'].startswith("9.9"):
+						if firmware['version'] not in versions:
+							versions.append(firmware['version'])
+			except KeyError:
+				continue
+		api_db.update(dict(field='ota_json_md5', value=api.headers['content-md5']), ['field'])
+	return versions
+
+
+def save_blobs(identifier, board_config, ecid, version, versions_saved, version_type):  # Save shsh2 blobs with tsschecker
 	if version_type is "beta":
 		save_path = os.path.dirname(os.path.realpath(__file__)) + "/blobs/beta/" + identifier + "/" + ecid + "/" + version
 
@@ -94,13 +108,14 @@ def save_blobs(identifier, board_config, ecid, version, versions_saved, version_
 		return
 
 
-def check_for_devices(): # Check for new entries in devices.txt and add them to the database
+def check_for_devices():  # Check for new entries in devices.txt and add them to the database
 	new_devices = []
 	print "Checking for new devices to add to database..."
 
 	with open('devices.txt') as f:
 		for line in f:
-			device_info, ecid = line.strip().split(':')
+			no_comment = line.split("//")[0].strip()
+			device_info, ecid = no_comment.split(':')
 			try:
 				identifier, board_config = device_info.split('-')
 			except ValueError:
@@ -124,6 +139,11 @@ def check_for_devices(): # Check for new entries in devices.txt and add them to 
 
 
 def fetch_signing(devices=None):
+	db = dataset.connect('sqlite:///devices.db')
+	api_db = db['api']
+	api_db.insert_ignore(dict(field='firmwares_json_md5', value=''), ['field'])
+	api_db.insert_ignore(dict(field='ota_json_md5', value=''), ['field'])
+
 	api = r.get('https://api.ipsw.me/v2.1/firmwares.json/condensed')
 
 	if devices:
@@ -165,9 +185,9 @@ def fetch_signing(devices=None):
 		db = dataset.connect('sqlite:///devices.db')
 		api_db = db['api']
 		blobs_db = db['blobs']
-		api_db.insert_ignore(dict(field='md5', value=''), ['field'])
 
-		if api.headers['content-md5'] != api_db.find_one(field='md5')['value']:
+		print "\nChecking for new firmwares..."
+		if api.headers['content-md5'] != api_db.find_one(field='firmwares_json_md5')['value']:
 			print "\nNew firmwares bring signed..."
 
 			for row in blobs_db.find():
@@ -183,7 +203,7 @@ def fetch_signing(devices=None):
 										firmware['version'],
 										'release')
 
-			api_db.update(dict(field='md5', value=api.headers['content-md5']), ['field'])
+			api_db.update(dict(field='firmwares_json_md5', value=api.headers['content-md5']), ['field'])
 		else:
 			print "\nNo new firmwares being signed..."
 		print "\nChecking for beta/ota firmwares..."
