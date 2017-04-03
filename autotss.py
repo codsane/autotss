@@ -50,11 +50,11 @@ def save_blobs(identifier, board_config, ecid, version, versions_saved, version_
 
 		if "Saved shsh blobs!" in output.stdout.read():
 			print "[TSS] Successfully saved blobs for " + identifier + " on " + version + " (" + version_type + ")" + ' with ECID: ' + ecid + "!"
-			db = dataset.connect('sqlite:///devices.db')
-			blobs_db = db['blobs']
-			blobs_db.update(dict(ecid=ecid, beta_versions_saved=versions_saved + version + ','), ['ecid'])
 		else:
 			print "[TSS] Error saving blobs for " + identifier + " on " + version + " (" + version_type + ")" + ' with ECID: ' + ecid + "!"
+		db = dataset.connect('sqlite:///devices.db')
+		blobs_db = db['blobs']
+		blobs_db.update(dict(ecid=ecid, beta_versions_saved=versions_saved + version + ','), ['ecid'])
 		return
 
 	elif version_type is "ota":
@@ -69,11 +69,11 @@ def save_blobs(identifier, board_config, ecid, version, versions_saved, version_
 
 		if "Saved shsh blobs!" in output.stdout.read():
 			print "[TSS] Successfully saved blobs for " + identifier + " on " + version + " (" + version_type + ")" + ' with ECID: ' + ecid + "!"
-			db = dataset.connect('sqlite:///devices.db')
-			blobs_db = db['blobs']
-			blobs_db.update(dict(ecid=ecid, ota_versions_saved=versions_saved + version + ','), ['ecid'])
 		else:
 			print "[TSS] Error saving blobs for " + identifier + " on " + version + " (" + version_type + ")" + ' with ECID: ' + ecid + "!"
+		db = dataset.connect('sqlite:///devices.db')
+		blobs_db = db['blobs']
+		blobs_db.update(dict(ecid=ecid, ota_versions_saved=versions_saved + version + ','), ['ecid'])
 		return
 
 	else:
