@@ -1,0 +1,7 @@
+identifier:ecid
+iPhone8,4:2953519105564
+
+or (specifying a boardconfig is optional, but required for some models)
+
+identifier-boardconfig:ecid
+iPhone8,4-n69uap:2953519105564

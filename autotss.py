@@ -186,8 +186,8 @@ def fetch_signing(devices=None):
 			api_db.update(dict(field='md5', value=api.headers['content-md5']), ['field'])
 		else:
 			print "\nNo new firmwares being signed..."
+		print "\nChecking for beta/ota firmwares..."
 		for row in blobs_db.find():
-			print "\nChecking for beta/ota firmwares..."
 			versions_saved = row['ota_versions_saved'].split(',')
 			for firmware in get_ota_versions(row['identifier']):
 				if firmware not in versions_saved:
@@ -210,7 +210,7 @@ def fetch_signing(devices=None):
 								firmware,
 								row['beta_versions_saved'],
 								'beta')
-			print "\nDone..."
+		print "\nDone..."
 
 
 def main():
