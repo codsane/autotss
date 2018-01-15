@@ -1,242 +1,190 @@
 import requests as r
+import configparser
 import subprocess
 import dataset
+import json
 import os
+import io
 
 
-def get_board_config(identifier):  # Returns the board config given a device identifier
-	api = r.get('https://api.ipsw.me/v2.1/firmwares.json/condensed').json()
-	return api['devices'][identifier]['BoardConfig']
+class autotss:
 
+    def __init__(self):
+        self.liveFirmwareURL = 'https://api.ipsw.me/v2.1/firmwares.json/condensed'
+        self.liveFirmwareAPI = None
+        # self.otaFirmwareURL = 'https://api.ipsw.me/v2.1/ota.json/condensed'
+        # self.otaFirmwareAPI = None
+        self.database = dataset.connect('sqlite:///autotss.db')
 
-def get_ota_versions(identifier): # Returns all OTA versions of iOS for a particular identifier
-	versions = []
+        self.importNewDevices()
+        self.devices = [row for row in self.database['devices']]
+        self.checkAllDevices()
+        self.pushToDatabase()
 
-	db = dataset.connect('sqlite:///devices.db')
-	api_db = db['api']
+    def importNewDevices(self):
+        """ Checks devices.txt for new entries. Parses entries and
+        inserts them into the devices table in our database """
 
-	api = r.get('https://api.ipsw.me/v2.1/ota.json/condensed')
+        print('Checking devices.ini for new devices...')
+        db = self.database['devices']
+        newDevices = []
+        numNew = 0
 
-	if api.headers['content-md5'] != api_db.find_one(field='ota_json_md5')['value']:
-		for firmware in api.json()[identifier]['firmwares']:
-			try:
-				if firmware['releasetype'] == 'Beta':
-					continue
-			except KeyError:
-				if not firmware['version'].startswith("9.9"):
-					if firmware['version'] not in versions:
-						versions.append(firmware['version'])
-		api_db.update(dict(field='ota_json_md5', value=api.headers['content-md5']), ['field'])
-	return versions
+        # Check to make sure devices.ini exists, otherwise warn and continue without new devices
+        if os.path.isfile('devices.ini'):
+            config = configparser.ConfigParser()
+            config.read('devices.ini')
+            for section in config.sections():
+                name = section
+                identifier = config.get(section, 'identifier').replace(' ','')
+                ecid = config.get(section, 'ecid')
 
+                try:
+                    boardconfig = config.get(section, 'boardconfig')
+                except:
+                    boardconfig = ''
+                if not boardconfig:
+                    boardconfig = self.getBoardConfig(identifier)
 
-def get_beta_versions(identifier):  # Returns all beta versions of iOS for a particular identifier
-	versions = []
+                newDevices.append({'deviceName': name, 'deviceID': identifier, 'boardConfig': boardconfig, 'deviceECID': ecid, 'blobsSaved': '[]'})
+        else:
+            print('Unable to find devices.ini')
 
-	db = dataset.connect('sqlite:///devices.db')
-	api_db = db['api']
+        # Add only new devices to database
+        for newDevice in newDevices:
+            print('Device: [{deviceName}] ECID: [{deviceECID}] Board Config: [{boardConfig}]'.format(**newDevice))
+            if not db.find_one(deviceECID=newDevice['deviceECID']):
+                numNew += 1
+                db.insert(newDevice)
+        print('Added {} new devices to the database'.format(str(numNew)))
 
-	api = r.get('https://api.ipsw.me/v2.1/ota.json/condensed')
+        return
 
-	if api.headers['content-md5'] != api_db.find_one(field='ota_json_md5')['value']:
-		for firmware in api.json()[identifier]['firmwares']:
-			try:
-				if firmware['releasetype'] == 'Beta':
-					if not firmware['version'].startswith("9.9"):
-						if firmware['version'] not in versions:
-							versions.append(firmware['version'])
-			except KeyError:
-				continue
-		api_db.update(dict(field='ota_json_md5', value=api.headers['content-md5']), ['field'])
-	return versions
+    def getBoardConfig(self, deviceID):
+        """ Using the IPSW.me API, when supplied a device identifier
+        the relevant board config will be returned. The request to
+        IPSW.me will be stored as `self.liveFirmwareAPI` to avoid
+        unneeded repeated calls to the IPSW.me API. """
 
+        if not self.liveFirmwareAPI:
+            self.liveFirmwareAPI = self.removeUnsignedFirmwares(r.get(self.liveFirmwareURL))
+        return self.liveFirmwareAPI[deviceID]['BoardConfig']
 
-def save_blobs(identifier, board_config, ecid, version, versions_saved, version_type):  # Save shsh2 blobs with tsschecker
-	if version_type is "beta":
-		save_path = os.path.dirname(os.path.realpath(__file__)) + "/blobs/beta/" + identifier + "/" + ecid + "/" + version
+    def checkForBlobs(self, deviceECID, buildID):
+        """ Checks against our database to see if blobs for a
+        device have already been saved for a specific iOS version.
+        The device is identified by a deviceECID, iOS version is
+        identified by a buildID. """
 
-		if not os.path.exists(save_path):
-			os.makedirs(save_path)
+        deviceInfo = self.database['devices'].find_one(deviceECID=deviceECID)
 
-		output = subprocess.Popen(
-			['./tsschecker', '-e', ecid, '--boardconfig', board_config, '-i', version, '-s', '--save-path', save_path, '-b', '-o'],
-			stdout=subprocess.PIPE)
+        for entry in json.loads(deviceInfo['blobsSaved']):
+            if entry['buildID'] == buildID:
+                return True
 
-		if "Saved shsh blobs!" in output.stdout.read():
-			print "[TSS] Successfully saved blobs for " + identifier + " on " + version + " (" + version_type + ")" + ' with ECID: ' + ecid + "!"
-		else:
-			print "[TSS] Error saving blobs for " + identifier + " on " + version + " (" + version_type + ")" + ' with ECID: ' + ecid + "!"
-		db = dataset.connect('sqlite:///devices.db')
-		blobs_db = db['blobs']
-		blobs_db.update(dict(ecid=ecid, beta_versions_saved=versions_saved + version + ','), ['ecid'])
-		return
+        return False
 
-	elif version_type is "ota":
-		save_path = os.path.dirname(os.path.realpath(__file__)) + "/blobs/ota/" + identifier + "/" + ecid + "/" + version
+    def removeUnsignedFirmwares(self, rawResponse):
+        """ Taking the raw response from the IPSW.me API, process
+         the response as a JSON object and remove unsigned firmware
+         entries. Returns a freshly processed devices JSON containing
+         only signed firmware versions. """
 
-		if not os.path.exists(save_path):
-			os.makedirs(save_path)
+        deviceAPI = rawResponse.json()['devices']
 
-		output = subprocess.Popen(
-			['./tsschecker', '-e', ecid, '--boardconfig', board_config, '-i', version, '-s', '--save-path', save_path, '-o'],
-			stdout=subprocess.PIPE)
+        ''' Rather than messing around with copies, we can loop
+         through all firmware dictionary objects and append the
+         signed firmware objects to a list. The original firmware
+         list is then replaced with the new (signed firmware only) list.'''
+        for deviceID in deviceAPI:
+            signedFirmwares = []
+            for firmware in deviceAPI[deviceID]['firmwares']:
+                if firmware['signed']:
+                    signedFirmwares.append(firmware)
+            deviceAPI[deviceID]['firmwares'] = signedFirmwares
 
-		if "Saved shsh blobs!" in output.stdout.read():
-			print "[TSS] Successfully saved blobs for " + identifier + " on " + version + " (" + version_type + ")" + ' with ECID: ' + ecid + "!"
-		else:
-			print "[TSS] Error saving blobs for " + identifier + " on " + version + " (" + version_type + ")" + ' with ECID: ' + ecid + "!"
-		db = dataset.connect('sqlite:///devices.db')
-		blobs_db = db['blobs']
-		blobs_db.update(dict(ecid=ecid, ota_versions_saved=versions_saved + version + ','), ['ecid'])
-		return
+        return deviceAPI
 
-	else:
-		save_path = os.path.dirname(os.path.realpath(__file__)) + "/blobs/release/" + identifier + "/" + ecid + "/" + version
+    def checkAllDevices(self):
+        """ Loop through all of our devices and grab matching
+        device firmwares from the firmwareAPI. Device and
+        firmware info is sent to saveBlobs(). """
 
-		if not os.path.exists(save_path):
-			os.makedirs(save_path)
+        print('\nSaving unsaved blobs for {} devices...'.format(str(len(self.devices))))
+        for device in self.devices:
+            for firmware in self.liveFirmwareAPI[device['deviceID']]['firmwares']:
+                self.saveBlobs(device, firmware['buildid'], firmware['version'])
 
-		output = subprocess.Popen(['./tsschecker', '-e', ecid, '--boardconfig', board_config, '-i', version, '-s', '--save-path', save_path], stdout=subprocess.PIPE)
+        print('Done saving blobs')
 
-		if "Saved shsh blobs!" in output.stdout.read():
-			print "[TSS] Successfully saved blobs for " + identifier + " on " + version + " (" + version_type + ")" + ' with ECID: ' + ecid + "!"
-			db = dataset.connect('sqlite:///devices.db')
-			blobs_db = db['blobs']
-			blobs_db.update(dict(ecid=ecid, release_versions_saved=versions_saved + version + ','), ['ecid'])
-		else:
-			print "[TSS] Error saving blobs for " + identifier + " on " + version + " (" + version_type + ")" + ' with ECID: ' + ecid + "!"
-		return
+    def saveBlobs(self, device, buildID, versionNumber):
+        """ First, check to see if blobs have already been
+        saved. If blobs have not been saved, use subprocess
+        to call the tsschecker script and save blobs. After
+        saving blobs, logSavedBlobs() is called to log that
+        we saved the device/firmware blobs. """
 
+        if self.checkForBlobs(device['deviceECID'], buildID):
+            return True
 
-def check_for_devices():  # Check for new entries in devices.txt and add them to the database
-	new_devices = []
-	print "Checking for new devices to add to database..."
+        print('Device: [{}] Version: [{}]'.format(device['deviceID'], versionNumber))
+        savePath = 'blobs/' + device['deviceID'] + '/' + device['deviceECID'] + '/release/' + versionNumber
+        if not os.path.exists(savePath):
+            os.makedirs(savePath)
 
-	with open('devices.txt') as f:
-		for line in f:
-			no_comment = line.split("//")[0].strip()
-			device_info, ecid = no_comment.split(':')
-			try:
-				identifier, board_config = device_info.split('-')
-			except ValueError:
-				identifier = device_info
-				board_config = get_board_config(identifier)
+        tssCall = subprocess.Popen(['./tsschecker_macos',
+                                    '-e', device['deviceECID'],
+                                    '--boardconfig', device['boardConfig'],
+                                    '--buildid', buildID,
+                                    '--save-path', savePath,
+                                    '-s'], stdout=subprocess.PIPE)
 
-			db = dataset.connect('sqlite:///devices.db')
+        # The io module is a bit overkill but helps easily handle the stream from tssCall
+        tssOutput = []
+        for line in io.TextIOWrapper(tssCall.stdout, encoding='utf-8'):
+            tssOutput.append(line.strip())
 
-			blobs_db = db['blobs']
-			if blobs_db.find_one(ecid=ecid) is None:
-				blobs_db.insert_ignore(dict(identifier=identifier,
-											board_config=board_config,
-											ecid=ecid,
-											release_versions_saved='',
-											beta_versions_saved='',
-											ota_versions_saved=''), ['ecid'])
-				new_devices.append(ecid)
-				print "Added - ID: " + identifier + ", ECID: " + ecid + ", Board Config: " + str(board_config)
-	if new_devices:
-		fetch_signing(new_devices)
+        ''' Checks console output for the `Saved shsh blobs!`
+        string. While this works for now, tsschecker updates
+        may break the check. It may be possible to check to
+        see if the .shsh file was created and also check for
+        the right file format. '''
+        if 'Saved shsh blobs!' in tssOutput:
+            self.logBlobsSaved(device, buildID, versionNumber)
+            return True
+        else:
+            return False
 
+    def logBlobsSaved(self, device, buildID, versionNumber):
+        """ Taking a reference to a device dictionary, we can
+         load the string `blobsSaved` from the database into
+         a JSON object, append a newly saved version, and
+         turn the JSON object back into a string and
+         replace `blobsSaved` """
 
-def fetch_signing(devices=None):
-	db = dataset.connect('sqlite:///devices.db')
-	api_db = db['api']
-	api_db.insert_ignore(dict(field='firmwares_json_md5', value=''), ['field'])
-	api_db.insert_ignore(dict(field='ota_json_md5', value=''), ['field'])
+        oldBlobsSaved = json.loads(device['blobsSaved'])
+        newBlobsSaved = {'releaseType': 'release', 'versionNumber': versionNumber, 'buildID': buildID}
 
-	api = r.get('https://api.ipsw.me/v2.1/firmwares.json/condensed')
+        oldBlobsSaved.append(newBlobsSaved)
 
-	if devices:
-		db = dataset.connect('sqlite:///devices.db')
-		blobs_db = db['blobs']
-		print "\nNew devices found and added, checking for signed firmwares..."
+        device['blobsSaved'] = json.dumps(oldBlobsSaved)
 
-		for ecid in devices:
-			device = blobs_db.find_one(ecid=ecid)
-			for firmware in api.json()['devices'][device['identifier']]['firmwares']:
-				if firmware['signed']:
-					device = blobs_db.find_one(ecid=ecid)
-					print "[TSS] Attempting to save blobs for " + device['identifier'] + " on " + firmware['version'] + " (release)" + ' with ECID: ' + device['ecid'] + "..."
-					save_blobs(device['identifier'],
-								device['board_config'],
-								device['ecid'],
-								firmware['version'],
-								device['release_versions_saved'],
-								'release')
-			for firmware in get_ota_versions(device['identifier']):
-				device = blobs_db.find_one(ecid=ecid)
-				print "[TSS] Attempting to save blobs for " + device['identifier'] + " on " + firmware + " (ota)" + ' with ECID: ' + device['ecid'] + "..."
-				save_blobs(device['identifier'],
-							device['board_config'],
-							device['ecid'],
-							firmware,
-							device['ota_versions_saved'],
-							'ota')
-			for firmware in get_beta_versions(device['identifier']):
-				device = blobs_db.find_one(ecid=ecid)
-				print "[TSS] Attempting to save blobs for " + device['identifier'] + " on " + firmware + " (beta)" + ' with ECID: ' + device['ecid'] + "..."
-				save_blobs(device['identifier'],
-							device['board_config'],
-							device['ecid'],
-							firmware,
-							device['beta_versions_saved'],
-							'beta')
-	else:
-		db = dataset.connect('sqlite:///devices.db')
-		api_db = db['api']
-		blobs_db = db['blobs']
+        return
 
-		print "\nChecking for new firmwares..."
-		if api.headers['content-md5'] != api_db.find_one(field='firmwares_json_md5')['value']:
-			print "\nNew firmwares bring signed..."
+    def pushToDatabase(self):
+        """ Loop through all of our devices and update their
+        entries into the database. ECID is used as the value
+        to update by, as it is the only unique device identifier."""
 
-			for row in blobs_db.find():
-				versions_saved = row['release_versions_saved'].split(',')
-				for firmware in api.json()['devices'][row['identifier']]['firmwares']:
-					if firmware['signed']:
-						if firmware['version'] not in versions_saved:
-							print "[TSS] Attempting to save blobs for " + row['identifier'] + " on " + firmware['version'] + " (release)" + ' with ECID: ' + row['ecid'] + "..."
-							save_blobs(row['identifier'],
-										row['board_config'],
-										row['ecid'],
-										row['release_versions_saved'],
-										firmware['version'],
-										'release')
+        print('\nUpdating database with newly saved blobs...')
+        for device in self.devices:
+            self.database['devices'].update(device, ['deviceECID'])
+        print('Done updating database')
 
-			api_db.update(dict(field='firmwares_json_md5', value=api.headers['content-md5']), ['field'])
-		else:
-			print "\nNo new firmwares being signed..."
-		print "\nChecking for beta/ota firmwares..."
-		for row in blobs_db.find():
-			versions_saved = row['ota_versions_saved'].split(',')
-			for firmware in get_ota_versions(row['identifier']):
-				if firmware not in versions_saved:
-					print "[TSS] Attempting to save blobs for " + row[
-						'identifier'] + " on " + firmware + " (ota)" + ' with ECID: ' + row['ecid'] + "..."
-					save_blobs(row['identifier'],
-								row['board_config'],
-								row['ecid'],
-								firmware,
-								row['ota_versions_saved'],
-								'ota')
-			versions_saved = row['beta_versions_saved'].split(',')
-			for firmware in get_beta_versions(row['identifier']):
-				if firmware not in versions_saved:
-					print "[TSS] Attempting to save blobs for " + row[
-						'identifier'] + " on " + firmware + " (beta)" + ' with ECID: ' + row['ecid'] + "..."
-					save_blobs(row['identifier'],
-								row['board_config'],
-								row['ecid'],
-								firmware,
-								row['beta_versions_saved'],
-								'beta')
-		print "\nDone..."
-
+        return
 
 def main():
-	check_for_devices()
-	fetch_signing()
-
+    autotss()
 
 if __name__ == "__main__":
-	main()
+    main()
