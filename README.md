@@ -12,7 +12,7 @@ Automatically save shsh2 blobs for signed iOS firmwares using [tsschecker](https
       - [Find your device ECID](https://www.theiphonewiki.com/wiki/ECID#Getting_the_ECID) (both hex and dec are accepted)
       - Determine if your iOS device requires a board config. iOS devices with multiple available board configs will require you to manually specify a board config. Check [this list](https://www.theiphonewiki.com/wiki/Models) to see if your device is applicable.
       - Put this information in devices.ini in the appropriate format (see below for formatting)
-2. Place the [tsschecker](https://github.com/tihmstar/tsschecker/releases) folder in the same directory as autotss.py
+2. Unzip the latest [tsschecker](https://github.com/tihmstar/tsschecker/releases) release, and place the unzipped folder in the same directory as autotss.py
 	- Once the unzipped tsschecker folder is in the same directory as autotss.py, the binary for your operating system will be automatically selected
 	- Or you can manually provide a path to your tsschecker binary:
       -   `autotss('/Users/codsane/tsschecker/tsschecker_macos')`
