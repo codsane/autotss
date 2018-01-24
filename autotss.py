@@ -133,6 +133,7 @@ class autotss:
             os.makedirs(savePath)
 
         tssCall = subprocess.Popen(['./tsschecker_macos',
+                                    '-d', device['deviceID'],
                                     '-e', device['deviceECID'],
                                     '--boardconfig', device['boardConfig'],
                                     '--buildid', buildID,
