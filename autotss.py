@@ -147,7 +147,6 @@ class autotss:
 
 		tssCall = subprocess.Popen(scriptArguments, stdout=subprocess.PIPE)
 
-		# The io module is a bit overkill but helps easily handle the stream from tssCall
 		tssOutput = []
 		for line in io.TextIOWrapper(tssCall.stdout, encoding='utf-8'):
 			tssOutput.append(line.strip())
@@ -270,6 +269,20 @@ class autotss:
 					sys.exit()
 
 				print('Automatically found tsschecker binary: ' + scriptPath)
+
+		# Check to make sure user has the right tsschecker version
+		tssCall = subprocess.Popen(scriptPath, stdout=subprocess.PIPE)
+
+		tssOutput = []
+		for line in io.TextIOWrapper(tssCall.stdout, encoding='utf-8'):
+			tssOutput.append(line.strip())
+
+		versionNumber = int(tssOutput[0].split('-')[-1].strip())
+		if versionNumber < 247:
+			print('Your version of tss checker is too old')
+			print('Get the latest version here: http://api.tihmstar.net/builds/tsschecker/tsschecker-latest.zip')
+			print('Unzip into the same folder as autotss')
+			sys.exit()
 
 		return scriptPath
 
