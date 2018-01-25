@@ -161,7 +161,7 @@ class autotss:
 			print('[{0}] [{1} - {2}] {3}'.format(device['deviceName'], versionNumber, buildID, 'Saved shsh blobs!'))
 		else:
 			self.logBlobsFailed(scriptArguments, savePath, tssOutput)
-			print('[{0}] [{1} - {2}] {3}'.format(device['deviceName'], versionNumber, buildID, 'Error, see log file: ' + '/blobs/' + savePath + '/tsschecker_log.txt'))
+                        print('[{0}] [{1} - {2}] {3}'.format(device['deviceName'], versionNumber, buildID, 'Error, see log file: ' + './' + savePath + '/tsschecker_log.txt'))
 
 		return
 
