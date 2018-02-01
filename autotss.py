@@ -85,7 +85,9 @@ class autotss:
 		 entries. Returns a freshly processed devices JSON containing
 		 only signed firmware versions. """
 
-		rawResponse = r.get('https://api.ipsw.me/v2.1/firmwares.json/condensed')
+		headers = {'User-Agent': 'Script to automatically save shsh blobs (https://github.com/codsane/autotss)'}
+
+		rawResponse = r.get('https://api.ipsw.me/v2.1/firmwares.json/condensed', headers=headers)
 
 		deviceAPI = rawResponse.json()['devices']
 
