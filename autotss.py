@@ -231,50 +231,19 @@ class autotss:
 
 		# No command line argument provided, check to see if a path was passed to autotss()
 		else:
-			if userPath:
-				scriptPath = userPath
+			scriptPath = "tsschecker"
 
-				# Check to make sure this file exists
-				if os.path.isfile(userPath):
-					print('Using manually specified tsschecker binary: ' + userPath)
-				else:
-					print('Unable to find tsschecker at specificed path: ' + userPath)
-					sys.exit()
+		try:
+			tssCall = subprocess.Popen(scriptPath, stdout=subprocess.PIPE)
+		except subprocess.CalledProcessError:
+			pass
+		except OSError:
+			print('tsschecker not found. Install or point to with -p')
+			print('Get tsschecker here: https://github.com/encounter/tsschecker/releases')
+			sys.exit()
 
-			# No path was passed to autotss(), try and find tsschecker within /tsschecker or /tsschecker-latest
-			else:
-				if sys.platform == "linux" or sys.platform == "linux2":
-					scriptName = 'tsschecker_linux'
-				elif sys.platform == "darwin":
-					scriptName = 'tsschecker_macos'
-				elif sys.platform == "win32" or "win64":
-					scriptName = 'tsschecker_windows.exe'
-
-				# Check to make sure this file exists
-				theIdealPath = os.path.join('tsschecker', scriptName)
-				theOtherOne = os.path.join('tsschecker-latest', scriptName)
-				if os.path.isfile(theIdealPath):
-					scriptPath = theIdealPath
-				elif os.path.isfile(theOtherOne):
-					scriptPath = theOtherOne
-				else:
-					print('\nCould not find the tsschecker binary.')
-
-					''' tsschecker releases haven't included a Windows binary in quite
-					a while. We check to see if one exists however warn the user that
-					they may have to build one themselves. '''
-					if scriptName == 'tsschecker_windows.exe':
-						print('Recent tsschecker builds have not included a Windows binary, you may need to build one yourself')
-
-					print('Get tsschecker here: http://api.tihmstar.net/builds/tsschecker/tsschecker-latest.zip')
-					print('Unzip into the same folder as autotss')
-					sys.exit()
-
-				print('Automatically found tsschecker binary: ' + scriptPath)
 
 		# Check to make sure user has the right tsschecker version
-		tssCall = subprocess.Popen(scriptPath, stdout=subprocess.PIPE)
-
 		tssOutput = []
 		for line in io.TextIOWrapper(tssCall.stdout, encoding='utf-8'):
 			tssOutput.append(line.strip())
