@@ -45,13 +45,23 @@ class autotss:
 				if not boardconfig:
 					boardconfig = self.getBoardConfig(identifier)
 
-				newDevices.append({'deviceName': name, 'deviceID': identifier, 'boardConfig': boardconfig, 'deviceECID': ecid, 'blobsSaved': '[]'})
+				try:
+					apnonces = json.loads(config.get(section, 'apnonces'))
+				except:
+					apnonces = ''
+
+				if apnonces != '':
+					for apnonce in apnonces:
+						newDevices.append({'deviceName': name, 'deviceID': identifier, 'boardConfig': boardconfig, 'deviceECID': ecid, 'apnonce': apnonce, 'blobsSaved': '[]'})
+				else:
+					newDevices.append({'deviceName': name, 'deviceID': identifier, 'boardConfig': boardconfig, 'deviceECID': ecid, 'apnonce': apnonces, 'blobsSaved': '[]'})
 		else:
 			print('Unable to find devices.ini')
 
 		# Add only new devices to database
 		for newDevice in newDevices:
-			if not db.find_one(deviceECID=newDevice['deviceECID']):
+			print(newDevice)
+			if not db.find_one(deviceECID=newDevice['deviceECID'], apnonce = newDevice['apnonce']):
 				print('Device: [{deviceName}] ECID: [{deviceECID}] Board Config: [{boardConfig}]'.format(**newDevice))
 				numNew += 1
 				db.insert(newDevice)
@@ -145,7 +155,12 @@ class autotss:
 						'--boardconfig', device['boardConfig'],
 						'--buildid', buildID,
 						'--save-path', savePath,
+						'--apnonce', device['apnonce'],
 						'-s']
+
+		if device['apnonce'] == '':
+			del scriptArguments[-3] 
+			del scriptArguments[-2]
 
 		tssCall = subprocess.Popen(scriptArguments, stdout=subprocess.PIPE)
 
@@ -200,7 +215,7 @@ class autotss:
 
 		print('\nUpdating database with newly saved blobs...')
 		for device in self.devices:
-			self.database['devices'].update(device, ['deviceECID'])
+			self.database['devices'].update(device, ['deviceECID', 'apnonce'])
 		print('Done updating database')
 
 		return
