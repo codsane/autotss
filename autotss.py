@@ -30,6 +30,9 @@ class autotss:
 		numNew = 0
 
 		# Check to make sure devices.ini exists, otherwise warn and continue without new devices
+		script_path = os.path.dirname(os.path.abspath( __file__ ))
+		print(script_path)
+		os.chdir(script_path)
 		if os.path.isfile('devices.ini'):
 			config = configparser.ConfigParser()
 			config.read('devices.ini')
@@ -258,8 +261,8 @@ class autotss:
 		return scriptPath
 
 def main():
-	# autotss('/Users/codsane/tsschecker/tsschecker_macos')
-	autotss()
+	autotss('/usr/local/bin/tsschecker')
+	# autotss()
 
 if __name__ == "__main__":
 	main()
