@@ -140,6 +140,7 @@ class autotss:
 			os.makedirs(savePath)
 
 		scriptArguments = [self.scriptPath,
+						'--nocache',
 						'-d', device['deviceID'],
 						'-e', device['deviceECID'],
 						'--boardconfig', device['boardConfig'],
